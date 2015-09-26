@@ -1,0 +1,16 @@
+{
+	"ImportPath": "github.com/manuwell/guardian",
+	"GoVersion": "go1.4.1",
+	"Deps": [
+		{
+			"ImportPath": "github.com/joho/godotenv",
+			"Comment": "v1-10-g4ed1339",
+			"Rev": "4ed13390c0acd2ff4e371e64d8b97c8954138243"
+		},
+		{
+			"ImportPath": "github.com/julienschmidt/httprouter",
+			"Comment": "v1.1-5-g109e267",
+			"Rev": "109e267447e95ad1bb48b758e40dd7453eb7b039"
+		}
+	]
+}
