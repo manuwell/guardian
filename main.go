@@ -3,23 +3,18 @@ package main
 import (
 	"github.com/manuwell/guardian/Godeps/_workspace/src/github.com/joho/godotenv"
 	"github.com/manuwell/guardian/Godeps/_workspace/src/github.com/julienschmidt/httprouter"
+	"github.com/manuwell/guardian/Godeps/_workspace/src/github.com/pquerna/otp"
 	"github.com/manuwell/guardian/Godeps/_workspace/src/github.com/pquerna/otp/totp"
 
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"html/template"
 	"image/png"
 	"log"
 	"net/http"
 	"os"
 )
-
-type TokenStruct struct {
-	Issuer  string
-	Account string
-	Secret  string
-	QRCode  string
-}
 
 type TokenValidationStruct struct {
 	Valid bool
@@ -51,16 +46,7 @@ func tokenValidation(w http.ResponseWriter, r *http.Request, ps httprouter.Param
 	w.Write(response)
 }
 
-func tokenImgGenereation(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      r.FormValue("issuer"),
-		AccountName: r.FormValue("account"),
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
+func qrcode(key *otp.Key) string {
 	// Convert TOTP key into a PNG
 	var buf bytes.Buffer
 	img, err := key.Image(400, 400)
@@ -68,12 +54,59 @@ func tokenImgGenereation(w http.ResponseWriter, r *http.Request, ps httprouter.P
 		panic(err)
 	}
 	png.Encode(&buf, img)
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
+}
 
-	w.Header().Set("Content-Type", "image/png")
-	w.Write(buf.Bytes())
+func render(key *otp.Key) []byte {
+	const tpl = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+  <meta charset="UTF-8">
+  <title>{{.Title}}</title>
+  </head>
+  <body style="text-align: center">
+    <img src="data:image/png;base64,{{ .Qrcode }}" />
+
+    <p>{{ .Issuer }}</p>
+    <p>{{ .Account }}</p>
+    <p>{{ .Secret }}</p>
+  </body>
+  </html>`
+
+	t, err := template.New("webpage").Parse(tpl)
+	data := struct {
+		Title   string
+		Qrcode  string
+		Issuer  string
+		Account string
+		Secret  string
+	}{
+		Title:   "Guardian Token Generator",
+		Qrcode:  qrcode(key),
+		Issuer:  key.Issuer(),
+		Account: key.AccountName(),
+		Secret:  key.Secret(),
+	}
+
+	var buf bytes.Buffer
+	err = t.Execute(&buf, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return buf.Bytes()
 }
 
 func tokenGenereation(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+	secret := os.Getenv("GUARDIAN_SECRET")
+	if secret != "" {
+		w.Write(bytes.NewBufferString("You already set an OTP secret").Bytes())
+		w.WriteHeader(http.StatusNotAcceptable)
+		return
+	}
+
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      r.FormValue("issuer"),
 		AccountName: r.FormValue("account"),
@@ -83,29 +116,13 @@ func tokenGenereation(w http.ResponseWriter, r *http.Request, ps httprouter.Para
 		panic(err)
 	}
 
-	// Convert TOTP key into a PNG
-	var buf bytes.Buffer
-	img, err := key.Image(200, 200)
-	if err != nil {
-		panic(err)
-	}
-	png.Encode(&buf, img)
-	imgBase64Str := base64.StdEncoding.EncodeToString(buf.Bytes())
+	os.Setenv("GUARDIAN_SECRET", key.Secret())
 
-	token := TokenStruct{
-		key.Issuer(),
-		key.AccountName(),
-		key.Secret(),
-		imgBase64Str,
-	}
+	response := render(key)
 
-	response, err := json.MarshalIndent(token, "", "\t")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
 	w.Write(response)
+	w.Header().Set("Content-Disposition", "attachment; filename='guardian.html'")
+	w.WriteHeader(http.StatusCreated)
 }
 
 func renderInternalServerError(w http.ResponseWriter, r *http.Request, message string) {
@@ -130,7 +147,10 @@ func main() {
 	}
 
 	router := httprouter.New()
-	router.GET("/token/:token", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	router.POST("/token", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		checkAuth(w, r, ps, tokenGenereation)
+	})
+	router.GET("/token/check/:token", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		checkAuth(w, r, ps, tokenValidation)
 	})
 
