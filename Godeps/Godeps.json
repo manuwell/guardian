@@ -3,6 +3,10 @@
 	"GoVersion": "go1.4.1",
 	"Deps": [
 		{
+			"ImportPath": "github.com/boombuler/barcode",
+			"Rev": "63f4aa2c46ebfac93952223a52df876f30b064c0"
+		},
+		{
 			"ImportPath": "github.com/joho/godotenv",
 			"Comment": "v1-10-g4ed1339",
 			"Rev": "4ed13390c0acd2ff4e371e64d8b97c8954138243"
@@ -11,6 +15,10 @@
 			"ImportPath": "github.com/julienschmidt/httprouter",
 			"Comment": "v1.1-5-g109e267",
 			"Rev": "109e267447e95ad1bb48b758e40dd7453eb7b039"
+		},
+		{
+			"ImportPath": "github.com/pquerna/otp",
+			"Rev": "3c48a72899fb0ff6401a8af80651132971ea6fa7"
 		}
 	]
 }
